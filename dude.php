@@ -266,7 +266,4 @@ function submit_Form(formID) {
 }
 </script>
 
-
-<a target="_blank" href="https://www.google.com/calendar/event?action=TEMPLATE&tmeid=YTQzNHZyMTY0cmlvMGw0YzVmNWl2NTJkOTggYW1pcmF2bmk4M0Bt&tmsrc=amiravni83%40gmail.com"><img border="0" src="https://www.google.com/calendar/images/ext/gc_button1_en.gif"></a>
-
 </body></html>
