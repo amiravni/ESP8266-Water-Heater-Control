@@ -17,3 +17,7 @@ In order to make it work you'll need
 5. PHP files go to website.
 
 6. .ino and .h files go to ESP8266 
+
+FAQ
+Q: What is "DUDE"?
+A: That's "water heater" in my language
