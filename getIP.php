@@ -2,8 +2,8 @@
 include_once "functions.php";
 
 function checkStateChage($stateOnly) {
-	$stateFile = fopen("myState.txt", "r") or die("Unable to open file!");
-	$stringFromFile = fread($stateFile,filesize("myState.txt"));
+	$stateFile = fopen(myStateName, "r") or die("Unable to open file!");
+	$stringFromFile = fread($stateFile,filesize(myStateName));
 	fclose($stateFile);
 	$pos = strpos($stringFromFile, " ");
 //	$lastTime =  date("Y-m-d H:i:s",substr($stringFromFile, 0, $pos));
@@ -47,12 +47,12 @@ function printStartEnd($conn,$result) {
 if ( sha1($_GET['psswd']) == PWD_SHA)	
 {
 	$ip = $_SERVER['REMOTE_ADDR'];
-	$filename = "myIPadd.txt";
+	$filename = IPtextName;
 	file_put_contents($filename, $ip, LOCK_EX);
 	$stateOnly = $_GET['myState'];
 	checkStateChage($stateOnly);
 	$myState = strtotime(date("Y-m-d H:i:s")). " ".$stateOnly;
-	$filename = "myState.txt";
+	$filename = myStateName;
 	file_put_contents($filename, $myState, LOCK_EX);
 	$conn = startConnection();
 	printStartEnd($conn,getTable($conn));

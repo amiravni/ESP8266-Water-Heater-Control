@@ -151,8 +151,8 @@ if ($sVar->Command != NULL) {
 		}
 		elseif ($sVar->Command=='Update'){
 			$sVar = getVariablesUpdate($sVar);
-			$ipAddFile = fopen("myIPadd.txt", "r") or die("Unable to open file!");
-			$ipAdd = fread($ipAddFile,filesize("myIPadd.txt"));
+			$ipAddFile = fopen(IPtextName, "r") or die("Unable to open file!");
+			$ipAdd = fread($ipAddFile,filesize(IPtextName));
 			fclose($ipAddFile);
 			$baseURL =  'http://'. $ipAdd;
 			$fullURL = $baseURL;
@@ -225,8 +225,8 @@ if ($sVar->Command=='Update') {
 	echo '<br>';
 }
 
-$stateFile = fopen("myState.txt", "r") or die("Unable to open file!");
-$stringFromFile = fread($stateFile,filesize("myState.txt"));
+$stateFile = fopen(myStateName, "r") or die("Unable to open file!");
+$stringFromFile = fread($stateFile,filesize(myStateName));
 fclose($stateFile);
 $pos = strpos($stringFromFile, " ");
 $lastTime =  date("Y-m-d H:i:s",substr($stringFromFile, 0, $pos));
