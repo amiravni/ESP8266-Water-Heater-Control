@@ -62,10 +62,7 @@ function printTable($conn,$result) {
 	if ($result->num_rows > 0) {
 		// output data of each row
 		while($row = $result->fetch_assoc()) {
-			if (isOutOfdate($row)) {
-				EraseQuery($conn,$row["id"]);
-			}
-			else {
+			if (handleDailyQuery($conn,$row)) {
 				drawTableRow($row);
 			}
 		}

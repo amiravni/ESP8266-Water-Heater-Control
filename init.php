@@ -4,4 +4,6 @@ define("PWD_DB", "YOUR_PASSWORD_FOR_SQL");
 define("NAME_DB", "YOUR_SQL_DB_NAME");
 define("NAME_DB_TOUSE", "YOUR_SQL_DB_TO_USE");
 define("PWD_SHA", "YOUR_REQUEST_PASSWORD_AFTER_SHA1_TRANSFORM");
+define("Notification_ON", "YOUR_PUSHINGBOX_ON_ID");
+define("Notification_OFF", "YOUR_PUSHINGBOX_OFF_ID");
 ?>

@@ -47,7 +47,31 @@ function EraseQuery($conn,$id){
 	return ($conn->query($sql));
 }
 
-function isOutOfDate($row) {
-	return (strtotime($row["endTime"]) - strtotime(date("Y-m-d H:i:s")) < 0);
-} 
+
+
+function handleDailyQuery($conn,$row) {
+
+	$timeGap = (strtotime($row["endTime"]) - strtotime(date("Y-m-d H:i:s")) < 0);
+	if ($timeGap) {
+		echo $row["toRepeat"]." <br>";
+		if ($row["toRepeat"] == "Daily") {
+			$newTimeStart = date('Y-m-d H:i', strtotime('+'. 1 .' days',strtotime($row["startTime"])));
+			$newTimeEnd = date('Y-m-d H:i', strtotime('+'. 1 .' days',strtotime($row["endTime"])));
+			$sql = "UPDATE ".NAME_DB_TOUSE." SET startTime='".$newTimeStart."',endTime='".$newTimeEnd."' WHERE id=".$row["id"];
+			if ($conn->query($sql) === TRUE) {
+				return TRUE;
+			} else {
+				EraseQuery($conn,$row["id"]);
+				return FALSE;
+			}
+		}
+		else {
+			EraseQuery($conn,$row["id"]);
+			return FALSE;
+		}
+		
+	}
+	return TRUE; 	
+}
+
 ?>
