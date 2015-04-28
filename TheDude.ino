@@ -1,14 +1,15 @@
-#define DEBUG 0
-#define BIAS 1
-#define DUDEPIN 0
+#define DEBUG 1  //Print to Serial
+#define DUDEPIN 12 // Pin to Relay
 #define REFRESHTIME 1 //MINUTES
 #define PRINTDEBUG(STR) \
-{	\
-  if (DEBUG) Serial.println(STR); \
-}
+  {	\
+    if (DEBUG) Serial.println(STR); \
+  }
+#define BIAS 1
 #include <ESP8266WiFi.h>
-#include "TheDudeParams.h"
+#include "TheDudeParams.h" // Change this file params
 
+//INIT
 const char* ssid     = MY_SSID;
 const char* password = MY_PWD;
 const char* host = MY_HOST;
@@ -16,6 +17,8 @@ const char* hostIP = MY_HOSTIP;
 String url = "/getIP.php?psswd=";
 WiFiServer server(80);
 
+
+//Class defintion of the water heater control
 class dudeControl {
   public:
     //   dudeControl();
@@ -23,9 +26,10 @@ class dudeControl {
       dudePin = pin;
       startTime = 9999;
       endTime = -9999;
-      timeOfLastGet = millis()/1000 + REFRESHTIME*60;
+      timeOfLastGet = millis() / 1000 + REFRESHTIME * 60;
       currentState = LOW;
       lastCurrentState = LOW;
+      updateNeeded = HIGH;
       pinMode(dudePin, OUTPUT);
       digitalWrite(dudePin, currentState);
     }
@@ -34,6 +38,7 @@ class dudeControl {
     }
     void changeState() {
       digitalWrite(dudePin, currentState);
+      updateNeeded = HIGH;
     }
     void changeState(bool stt) {
       currentState = stt;
@@ -106,64 +111,82 @@ class dudeControl {
     int startTime;
     int endTime;
     unsigned long timeOfLastGet;
-    bool currentState, lastCurrentState;
+    bool currentState, lastCurrentState, updateNeeded;
   private:
 
 };
 
-void connectWifi(const char* ssid,const char* password) {
-      int WiFiCounter = 0;
-      // We start by connecting to a WiFi network
-      PRINTDEBUG("Connecting to ");
-      PRINTDEBUG(ssid);
-      WiFi.disconnect();
-      WiFi.mode(WIFI_STA);
-      WiFi.begin(ssid, password);
-      while (WiFi.status() != WL_CONNECTED && WiFiCounter < 30) {
-          delay(1000);
-          WiFiCounter++;
-          PRINTDEBUG(".");
-      }
-    
-      PRINTDEBUG("");
-      PRINTDEBUG("WiFi connected");
-      PRINTDEBUG("IP address: ");
-      PRINTDEBUG(WiFi.localIP());
+// Fucntion to connect WiFi
+void connectWifi(const char* ssid, const char* password) {
+  int WiFiCounter = 0;
+  // We start by connecting to a WiFi network
+  PRINTDEBUG("Connecting to ");
+  PRINTDEBUG(ssid);
+  WiFi.disconnect();
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED && WiFiCounter < 30) {
+    delay(1000);
+    WiFiCounter++;
+    PRINTDEBUG(".");
+  }
+
+  PRINTDEBUG("");
+  PRINTDEBUG("WiFi connected");
+  PRINTDEBUG("IP address: ");
+  PRINTDEBUG(WiFi.localIP());
 }
 
 
+// Inifinite loop - Causes to reset self
+void resetSelf() {
+  PRINTDEBUG("Reseting");
+  while (1) {}
+}
 
 
+dudeControl dude; //define variable
 
-dudeControl dude;
+////////////////////////// SETUP //////////////////////////////////////////////////////
 
 void setup() {
-  if (DEBUG) Serial.begin(115200);
+  if (DEBUG) Serial.begin(115200);  //Start Serial
   delay(10);
-
-  
-  connectWifi(ssid, password);
-  server.begin();
-  dude.begin(DUDEPIN);
+  connectWifi(ssid, password); // Start WiFi
+  server.begin();  // Start Server
+  dude.begin(DUDEPIN); // Start class
   delay(10);
 }
+
+
+////////////////////////// LOOP //////////////////////////////////////////////////////
+
 
 void loop() {
 
   delay(10);
-  
+  int connectFails = 0;
+
   while ((WiFi.status() != WL_CONNECTED)) {
-      connectWifi(ssid, password);
-      dude.checkState();
+    connectWifi(ssid, password);
+    dude.checkState();
+    connectFails++;
+    if (connectFails > 4) {
+    resetSelf();  // If 2 minutes passed with no connection - Reset Self
+    }
   }
+
+  WiFiClient clientS = server.available();
+  unsigned long timePassed = (millis() / 1000) - dude.timeOfLastGet;
   
-WiFiClient clientS = server.available();
   if (!clientS) {
-    if ((millis()/1000) - dude.timeOfLastGet < (60*REFRESHTIME) ) {
+     // Skip this return only if timePassed as needed or needed upadate and timepassed more than 10 seconds
+     // (less make the website not respond)
+    if ( (!dude.updateNeeded && timePassed < (60 * REFRESHTIME))  || (dude.updateNeeded &&  timePassed < 10 ) ) {  
       return;
-      }
+    }
   }
-  else
+  else // Server Commands
   {
     PRINTDEBUG("new client");
     while (!clientS.available()) {
@@ -173,16 +196,17 @@ WiFiClient clientS = server.available();
     PRINTDEBUG(req);
     clientS.flush();
     int val = 1;
-    if (req.indexOf("/gpio/0") != -1)
+    if (req.indexOf("/gpio/0") != -1) // LOW
       dude.changeState(LOW);
-    else if (req.indexOf("/gpio/1") != -1)
+    else if (req.indexOf("/gpio/1") != -1) //HIGH
       dude.changeState(HIGH);
-    else if  (req.indexOf("/gpio/s") != -1) {}
-    else if  (req.indexOf("/favicon.ico") != -1) {
-      return;
-    }
+    else if  (req.indexOf("/gpio/s") != -1) {} // GET STATUS
+    else if  (req.indexOf("/gpio/u") != -1) { val = 0; }    // UPDATE
+   // else if  (req.indexOf("/favicon.ico") != -1) {
+   //   return;
+   // }
     else {
-      val = 0;
+     return;
     }
     String s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html>\r\n Last GPIO state was:  ";
     s += (dude.currentState) ? "high" : "low";
@@ -196,7 +220,8 @@ WiFiClient clientS = server.available();
 
 
 
-
+  dude.updateNeeded = LOW;   // Will go to update only when state is changed (To update website)
+  
   // Use WiFiClient class to create TCP connections
   PRINTDEBUG("connecting to ");
   PRINTDEBUG(host);
@@ -215,7 +240,8 @@ WiFiClient clientS = server.available();
   // This will send the request to the server
   PRINTDEBUG("Requesting URL: ");
   delay(10);
-  String url_myState = url + MY_WEB_PWD + "&myState=" + (dude.currentState ? "1" : "0");
+  String timeFromReset = String( (int)((millis()/1000)/60), DEC);
+  String url_myState = url + MY_WEB_PWD + "&myState=" + (dude.currentState ? "1" : "0") + "&lastReset=" + timeFromReset;
   PRINTDEBUG(url_myState);
   delay(10);
   client.print(String("GET ") + url_myState + " HTTP/1.1\r\n" +
@@ -238,28 +264,30 @@ WiFiClient clientS = server.available();
         dude.getEndTime(line);
       }
     }
-    client.stop();
     if  (!dataFlag) {
       dataFlagCounter++;
-      if (dataFlagCounter > 10) {
+      if (dataFlagCounter > 20) {
+        PRINTDEBUG("Connection Failed!");
+        client.stop();
         dude.updateTime();
         return;
       }
-      delay(2000);
+      delay(500);
     }
   }
+ client.stop();
 
   delay(100);
-  dude.checkState();
+  dude.checkState();  // Check if GPIO needs to be changed
 
 
-  if (dataFlag) {
+  if (dataFlag) { // UPDATE TIME
     dude.updateTime();
     PRINTDEBUG(dude.startTime);
     PRINTDEBUG(dude.endTime);
   }
   PRINTDEBUG();
   PRINTDEBUG("closing connection");
-  
+
 }
 

@@ -7,7 +7,7 @@ function checkStateChage($stateOnly) {
 	fclose($stateFile);
 	$pos = strpos($stringFromFile, " ");
 //	$lastTime =  date("Y-m-d H:i:s",substr($stringFromFile, 0, $pos));
-	$lastState = substr($stringFromFile, $pos+1);
+	$lastState = substr($stringFromFile, $pos+1,1);
 	if ($stateOnly != $lastState) {
 		if ($stateOnly == 1) {
 			$ch = curl_init("http://api.pushingbox.com/pushingbox?devid=".Notification_ON);
@@ -50,8 +50,11 @@ if ( sha1($_GET['psswd']) == PWD_SHA)
 	$filename = IPtextName;
 	file_put_contents($filename, $ip, LOCK_EX);
 	$stateOnly = $_GET['myState'];
-	checkStateChage($stateOnly);
-	$myState = strtotime(date("Y-m-d H:i:s")). " ".$stateOnly;
+	$lastReset = $_GET['lastReset'];
+	if ($lastReset>0) {
+		checkStateChage($stateOnly);
+	}
+	$myState = strtotime(date("Y-m-d H:i:s")). " ".$stateOnly." ".$lastReset;
 	$filename = myStateName;
 	file_put_contents($filename, $myState, LOCK_EX);
 	$conn = startConnection();

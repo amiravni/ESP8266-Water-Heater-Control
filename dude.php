@@ -158,7 +158,7 @@ if ($sVar->Command != NULL) {
 			$fullURL = $baseURL;
 			switch ($sVar->action) {
 				case "Update From List":
-					$fullURL = $baseURL;
+					$fullURL = $baseURL. '/gpio/u';;
 					break;
 				case "Get Current Status":
 					$fullURL = $baseURL. '/gpio/s';
@@ -206,7 +206,7 @@ printTable($conn,getTable($conn));
 <div> Water Heater update automatically every 5 minutes, For Manual update:
 <form id="updateManual" action="dude.php" method="POST">
 <input type="hidden" name="Command" value="Update">
- Action:<input list="action" name="myAction" value="Update From List">
+ Action:<input list="action" name="myAction">
 	  <datalist id="action">
 		<option value="Update From List">
 		<option value="Get Current Status">
@@ -230,11 +230,12 @@ $stringFromFile = fread($stateFile,filesize(myStateName));
 fclose($stateFile);
 $pos = strpos($stringFromFile, " ");
 $lastTime =  date("Y-m-d H:i:s",substr($stringFromFile, 0, $pos));
- if (substr($stringFromFile, $pos+1)=="0")
+$lastReset = substr($stringFromFile, $pos+3);
+if (substr($stringFromFile, $pos+1,1)=="0")
 	$lastState = "Off";
 else
 	$lastState = "On";
-echo "Last auto-contact from the water heater was on ". $lastTime. " and the status was ". $lastState;
+echo "Last auto-contact from the water heater was on ". $lastTime. " and the status was ". $lastState. "  (Reset was ".$lastReset." Minutes ago)";
 
 
 ?>
