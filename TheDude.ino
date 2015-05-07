@@ -1,6 +1,7 @@
 #define DEBUG 1  //Print to Serial
 #define DUDEPIN 12 // Pin to Relay
 #define REFRESHTIME 1 //MINUTES
+#define WHILE_TO 5000 // milliseconds
 #define PRINTDEBUG(STR) \
   {	\
     if (DEBUG) Serial.println(STR); \
@@ -27,14 +28,18 @@ class dudeControl {
       startTime = 9999;
       endTime = -9999;
       timeOfLastGet = millis() / 1000 + REFRESHTIME * 60;
+      timeOfLastUpdate = millis() / 1000 + REFRESHTIME * 60;
       currentState = LOW;
       lastCurrentState = LOW;
       updateNeeded = HIGH;
       pinMode(dudePin, OUTPUT);
       digitalWrite(dudePin, currentState);
     }
-    void updateTime() {
-      timeOfLastGet = (millis() / 1000); //Time in seconds of lastGetUrl
+    void updateTime(int dataFlag) {
+      timeOfLastUpdate = (millis() / 1000); //Time in seconds of lastUpdate
+      if (dataFlag == 2) {
+        timeOfLastGet = timeOfLastUpdate; //Time in seconds of lastGetUrl
+      }
     }
     void changeState() {
       digitalWrite(dudePin, currentState);
@@ -92,14 +97,16 @@ class dudeControl {
 
     void checkState() {   // Check if GPIO need to be changed
       int minutesDiff = (int)(((millis() / 1000) - timeOfLastGet) / 60);
-      if (timeOfLastGet > 0 &&  (  minutesDiff > startTime &&  minutesDiff < endTime))
+      if (timeOfLastGet > 0 &&  (  minutesDiff >= startTime &&  minutesDiff <= endTime))
       {
         PRINTDEBUG("TurnOn");
+        PRINTDEBUG(minutesDiff);
         currentState = HIGH;
       }
       else
       {
         PRINTDEBUG("TurnOff");
+        PRINTDEBUG(minutesDiff);
         currentState = LOW;
       }
       if (lastCurrentState != currentState) {
@@ -110,7 +117,7 @@ class dudeControl {
     int dudePin;
     int startTime;
     int endTime;
-    unsigned long timeOfLastGet;
+    unsigned long timeOfLastGet, timeOfLastUpdate;
     bool currentState, lastCurrentState, updateNeeded;
   private:
 
@@ -146,7 +153,7 @@ void resetSelf() {
 
 
 dudeControl dude; //define variable
-
+unsigned long whileTimeout = 0;
 ////////////////////////// SETUP //////////////////////////////////////////////////////
 
 void setup() {
@@ -172,24 +179,29 @@ void loop() {
     dude.checkState();
     connectFails++;
     if (connectFails > 4) {
-    resetSelf();  // If 2 minutes passed with no connection - Reset Self
+      resetSelf();  // If 2 minutes passed with no connection - Reset Self
     }
   }
 
   WiFiClient clientS = server.available();
-  unsigned long timePassed = (millis() / 1000) - dude.timeOfLastGet;
-  
+  unsigned long timePassed = (millis() / 1000) - dude.timeOfLastUpdate;
+
   if (!clientS) {
-     // Skip this return only if timePassed as needed or needed upadate and timepassed more than 10 seconds
-     // (less make the website not respond)
-    if ( (!dude.updateNeeded && timePassed < (60 * REFRESHTIME))  || (dude.updateNeeded &&  timePassed < 10 ) ) {  
+    // Skip this return only if timePassed as needed or needed upadate and timepassed more than 10 seconds
+    // (less make the website not respond)
+    if ( (!dude.updateNeeded && timePassed < (60 * REFRESHTIME))  || (dude.updateNeeded &&  timePassed < 10 ) ) {
       return;
     }
   }
   else // Server Commands
   {
     PRINTDEBUG("new client");
-    while (!clientS.available()) {
+    whileTimeout = millis();
+    while (!clientS.available() ) {
+      if (  (millis() - whileTimeout) > WHILE_TO ) {
+        clientS.stop();
+        return;
+      }
       delay(1);
     }
     String req = clientS.readStringUntil('\r');
@@ -201,27 +213,30 @@ void loop() {
     else if (req.indexOf("/gpio/1") != -1) //HIGH
       dude.changeState(HIGH);
     else if  (req.indexOf("/gpio/s") != -1) {} // GET STATUS
-    else if  (req.indexOf("/gpio/u") != -1) { val = 0; }    // UPDATE
-   // else if  (req.indexOf("/favicon.ico") != -1) {
-   //   return;
-   // }
+    else if  (req.indexOf("/gpio/u") != -1) {
+      val = 0;  // UPDATE
+    }
+    // else if  (req.indexOf("/favicon.ico") != -1) {
+    //   return;
+    // }
     else {
-     return;
+      clientS.stop();
+      return;
     }
     String s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html>\r\n Last GPIO state was:  ";
     s += (dude.currentState) ? "high" : "low";
     s += "</html>\n";
     clientS.print(s);
     delay(10);
-    if (val) return;
     clientS.stop();
+    if (val) return;
   }
 
 
 
 
   dude.updateNeeded = LOW;   // Will go to update only when state is changed (To update website)
-  
+
   // Use WiFiClient class to create TCP connections
   PRINTDEBUG("connecting to ");
   PRINTDEBUG(host);
@@ -240,7 +255,7 @@ void loop() {
   // This will send the request to the server
   PRINTDEBUG("Requesting URL: ");
   delay(10);
-  String timeFromReset = String( (int)((millis()/1000)/60), DEC);
+  String timeFromReset = String( (int)((millis() / 1000) / 60), DEC);
   String url_myState = url + MY_WEB_PWD + "&myState=" + (dude.currentState ? "1" : "0") + "&lastReset=" + timeFromReset;
   PRINTDEBUG(url_myState);
   delay(10);
@@ -253,15 +268,18 @@ void loop() {
   int dataFlag = 0;
   int dataFlagCounter = 0;
   while (!dataFlag) {
-    while (client.available()) {
-      dataFlag = 1;
+    whileTimeout = millis();
+    while (client.available() &&  ((millis() - whileTimeout) < WHILE_TO) ) {
+      if (!dataFlag) dataFlag = 1;
       String line = client.readStringUntil('\r');
       if (line.length() > 9 + BIAS && line.startsWith("NextStart:", BIAS)) {
-        PRINTDEBUG("Found");
+        PRINTDEBUG("Found ON");
         dude.getStartTime(line);
       }
       if (line.length() > 9 + BIAS && line.startsWith("Next_End_:", BIAS)) {
+        PRINTDEBUG("Found OFF");
         dude.getEndTime(line);
+        dataFlag = 2;
       }
     }
     if  (!dataFlag) {
@@ -269,23 +287,25 @@ void loop() {
       if (dataFlagCounter > 20) {
         PRINTDEBUG("Connection Failed!");
         client.stop();
-        dude.updateTime();
+        dude.updateTime(dataFlag);
         return;
       }
       delay(500);
     }
   }
- client.stop();
+  client.flush();
+  client.stop();
 
   delay(100);
+  dude.updateTime(dataFlag);  // UPDATE TIME  
   dude.checkState();  // Check if GPIO needs to be changed
+  PRINTDEBUG(dataFlag);
+  PRINTDEBUG(dude.timeOfLastUpdate);
+  PRINTDEBUG(dude.timeOfLastGet);  
+  PRINTDEBUG(dude.startTime);
+  PRINTDEBUG(dude.endTime);
 
 
-  if (dataFlag) { // UPDATE TIME
-    dude.updateTime();
-    PRINTDEBUG(dude.startTime);
-    PRINTDEBUG(dude.endTime);
-  }
   PRINTDEBUG();
   PRINTDEBUG("closing connection");
 
